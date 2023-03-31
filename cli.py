@@ -1,13 +1,16 @@
 import click
 import requests
 
+
 @click.group()
 def cli():
     pass
 
+
 @cli.group()
 def artist():
     pass
+
 
 @artist.command()
 @click.option("--name", prompt=True)
@@ -20,6 +23,7 @@ def add(name, url):
     else:
         click.echo(f"Error adding artist: {response.text}")
 
+
 @artist.command()
 @click.argument("name")
 def delete(name):
@@ -31,6 +35,7 @@ def delete(name):
     else:
         click.echo(f"Error deleting artist: {response.text}")
 
+
 @artist.command()
 def list():
     response = requests.get("http://localhost:8000/artist")
@@ -41,6 +46,6 @@ def list():
     else:
         click.echo(f"Error getting artists: {response.text}")
 
+
 if __name__ == "__main__":
     cli()
-

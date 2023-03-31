@@ -132,9 +132,7 @@ async def delete_artist(name: str):
 async def root():
     # Call extract_music_data() to update the database
     artist_urls = get_artist_urls()
-    extract_music_data(
-        artist_urls, DB_NAME
-    )
+    extract_music_data(artist_urls, DB_NAME)
 
     # Get the newest music data from the database
     music_data = get_new_music_data(DB_NAME, "20230101")
