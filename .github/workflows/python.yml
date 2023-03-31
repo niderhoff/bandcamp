@@ -1,0 +1,25 @@
+name: Python Static Analysis
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  static-analysis:
+    name: Static Analysis
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ readFile('.python-version') }}
+      - name: Install dependencies
+        run: pip install flake8 black
+      - name: Run Flake8
+        run: flake8
+      - name: Run Black
+        run: black --check .
