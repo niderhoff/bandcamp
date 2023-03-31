@@ -13,13 +13,23 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
+
+      - name: Get Python version
+        id: get-python-version
+        uses: actions-ecosystem/read-file@v1
+        with:
+          path: .python-version
+
       - name: Set up Python
         uses: actions/setup-python@v2
         with:
-          python-version: ${{ readFile('.python-version') }}
+          python-version: ${{ steps.get-python-version.outputs.content }}
+
       - name: Install dependencies
         run: pip install flake8 black
+
       - name: Run Flake8
         run: flake8
+
       - name: Run Black
         run: black --check .
