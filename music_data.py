@@ -1,10 +1,12 @@
-import requests
-from bs4 import BeautifulSoup
-from urllib.parse import urljoin, urlparse
-import re
 import datetime
 import json
+import re
 import sqlite3
+from urllib.parse import urljoin, urlparse
+
+import requests
+from bs4 import BeautifulSoup
+from tabulate import tabulate
 
 
 def extract_music_items_from_url(url):
@@ -236,14 +238,14 @@ def get_new_music_data(db_filename, release_date_str):
     conn = sqlite3.connect(db_filename)
     c = conn.cursor()
     c.execute(
-        """SELECT id, 
-                        coalesce(title, ''), 
-                        coalesce(artist, ''), 
-                        coalesce(release_date, ''), 
-                        coalesce(art_url, ''), 
-                        coalesce(link, ''), 
-                        coalesce(tracks, '[]') 
-                 FROM music_data 
+        """SELECT id,
+                        coalesce(title, ''),
+                        coalesce(artist, ''),
+                        coalesce(release_date, ''),
+                        coalesce(art_url, ''),
+                        coalesce(link, ''),
+                        coalesce(tracks, '[]')
+                 FROM music_data
                  WHERE release_date > ?""",
         (release_date,),
     )
@@ -266,9 +268,6 @@ def get_new_music_data(db_filename, release_date_str):
     # Close the database connection and return the music data
     conn.close()
     return music_data
-
-
-from tabulate import tabulate
 
 
 def print_music_data_table(music_data):
