@@ -26,26 +26,29 @@ def add(name):
 
 
 @artist.command()
-@click.option("--name", prompt=True)
+@click.option("--name")
 def delete(name):
-    # List all artists and find the ID of the artist with the matching nickname
-    response = requests.get(f"{base_url}/artists")
-    response.raise_for_status()
-    artists = response.json()
-    matching_artists = [artist for artist in artists if artist["nickname"] == name]
-    if not matching_artists:
-        raise ValueError(f"No artist found with nickname {name}")
-    artist_id = matching_artists[0]["id"]
+    if not name:
+        # List all artists and prompt the user to select one
+        response = requests.get(f"{base_url}/artists")
+        response.raise_for_status()
+        artists = response.json()
+        choices = "\n".join(f"{artist['id']}: {artist['nickname']}" for artist in artists)
+        artist_id = click.prompt(f"Select artist to delete:\n{choices}", type=int)
+
+        # Get the nickname of the selected artist
+        name = next(artist["nickname"] for artist in artists if artist["id"] == artist_id)
 
     # Delete the artist with the matching ID
     response = requests.delete(f"{base_url}/artists/{artist_id}")
     response.raise_for_status()
     if response.status_code == 200 or response.status_code == 204:
-        click.echo(f"Artist '{name}' deleted successfully!")
+        click.echo(f"Artist '{name}' (id: {artist_id}) deleted successfully!")
     elif response.status_code == 404:
         click.echo("Artist not found.")
     else:
         click.echo(f"Error deleting artist: {response.text}")
+
 
 
 @artist.command()

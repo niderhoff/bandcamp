@@ -274,6 +274,19 @@ def extract_title_metadata(release_url: str) -> Release:
     return Release(title, artist, release_url, tracks, release_date)
 
 
+def update_releases_db():
+    with sqlite_db(DB_NAME) as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT nickname FROM artists")
+        rows = cursor.fetchall()
+        artist_nicknames = [row[0] for row in rows]
+
+    for artist_nickname in artist_nicknames:
+        try:
+            releases = get_new_releases(artist_nickname)
+        except Exception as e:
+            logging.error(f"Error updating releases for artist {artist_nickname}: {e}", exc_info=True)
+
+
 if __name__ == "__main__":
-    artist = "bookashade"
-    print(get_new_releases(artist))
+    update_releases_db()
