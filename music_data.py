@@ -1,299 +1,279 @@
-import datetime
-import json
+'''
+You are a backend developer proficient in python and we are together working on a project. Here's a summary of the project so far:
+* The goal of the project is to create a tool in Python to track new releases coming out from artists we follow. 
+* So far, we have implemented the core functionality of the tool, including error handling for network and HTTP issues, missing data, and incorrect input types.
+
+The Requirements are as follows:
+
+* Given a list of saved artist_nicknames, we will visit the bandcamp artist page at https://artist_nickname.bandcamp.com where we can see all music releases from that artist. 
+* We will download the page using requests and and parse the html with beautifulsoup.
+* We have defined a get_new_releases function that takes a user provided artist_nickname as input and returns list of dataclasses representing new releases from that artist.
+* The get_new_releases function first checks that the input argument is valid and that the artist subdomain is valid (all characters should be valid parts of an URL). It will then proceed to download the HTML from bandcamp, handling any possible HTTP errors.
+* For each artist subdomain, the function downloads the HTML from the Bandcamp page and extracts a list of urls to all releases of that artist.
+* The release can be found inside a html list '<ol class="music-grid">' object. Each list item looks like '<li class="music-grid-item">' and contains the link as well as title of that release.
+* The links of all releases are relative links will be added to a list. Since they are relative links, we will join them with the artist page using a proper method of joining urls. After we have finished, we will log a message stating how many release we have found.
+* In the next step, we will loop over the list and call the function extract_title_metadata on all list elements.
+
+* The function extract_title_metadata takes one argument which is a link to a bandcamp release page. We will make sure that the argument passed by the user is actually a valid link.
+* We will download that website using requests and extract the following information from the html using beautifulsoup:
+    - title: string
+    - artist_name: string
+    - release_date: string
+    - list of tracks: a list of 'track' dataclass instances.
+* The artist name can be extract from an html object which looks like this:
+"""
+<h3 style="margin:0px;">by 
+        <span> 
+          <a href="https://bookashade.bandcamp.com">Booka Shade</a>
+          </span>
+        
+        </h3>
+"""
+* The title name can be extracted from this html object:
+"""
+<h2 class="trackTitle">
+            Twisted Cadence [Single]
+            
+        </h2>
+"""
+* The release date can be extracted from this object:
+"""
+<div class="tralbumData tralbum-credits">
+                released March 10, 2023
+            <br>...
+            </div>
+"""
+* The list of tracks can be extracted from this html table:
+"""
+<table class="track_list track_table" id="track_table">
+<tbody><tr class="track_row_view linked" rel="tracknum=1">
+<td class="play-col"><a role="button" aria-label="Play Twisted Cadence"><div class="play_status"></div></a></td>
+<td class="track-number-col"><div class="track_number secondaryText">1.</div></td>
+<td class="title-col">
+    <div class="title">
+        <a href="/track/twisted-cadence"><span class="track-title">Twisted Cadence</span></a>
+        <span class="time secondaryText">
+            04:40
+        </span>
+    </div> 
+</td>
+<td class="info-col"><div class="info_link"><a href="/track/twisted-cadence"></a></div></td>
+<td class="download-col">
+<div class="dl_link">
+<a href="/track/twisted-cadence?action=download">
+        buy track
+</a>
+</div></td>
+</tr>
+</tbody></table>
+"""
+* For each track we want to extract the track_number, title, link and time and store it into a "Track"-dataclass.
+* The extracted information for all releases will be returned as a list of "Release"-dataclasses.
+
+Do you have any questions regarding the requirements?
+
+> No, the requirements are clear and detailed. However, I would like to clarify a few things:
+> Can we assume that the user will always provide valid artist nicknames? If not, how should we handle invalid input?
+> What should be the format of the output of the get_new_releases function? Should it be a list of Release-dataclasses or something else?
+> How do you want the logging to be handled? Should we write the log messages to a file or print them to the console?
+
+1. the artist nicknames should only contain alphanumeric characters as well as underline (_) and dash (-). Please validate the input accordingly.
+2. yes the output should be a list of Release dataclasses.
+3. we should write log messages to stdout using the INFO loglevel.
+
+> Understood. Here are a few more questions to clarify the requirements:
+> Can we assume that all releases will have at least one track or should we handle the case where no tracks are available?
+> How should we handle errors that occur during the extraction of metadata for a specific release? Should we skip that release and move on to the next one, or should we terminate the entire process and raise an exception?
+
+1. we can assume all releases have at least 1 track.
+2. if the extraction of metadata fails for a given release, we should skip this one, log an error and move on to the next one.
+
+> Got it, thanks for clarifying. Here are some additional questions:
+> Should we include the duration of each track in the Track dataclass or just the title, link, and track number?
+> Should we use a specific date format for the release_date field in the Release dataclass, or can we use any format as long as it's a string?
+> Should we assume that all releases will have the same number of tracks, or can they vary in number?
+
+1. we should include the duration
+2. for now we can keep it as a string.
+3. every release has a different number of tracks.
+
+> Thank you for clarifying. Here are a few more questions:
+> Should the Track dataclass include the duration in seconds or in some other format?
+> Should we include the total duration of a release in the Release dataclass, or should this be calculated elsewhere if needed?
+> Should we include any additional metadata for a release or a track, such as genre or album art?
+
+1. it can just be a string.
+2. this is not necessary.
+3. no additional metadata
+
+> Understood, thank you for clarifying. Here are a few more questions:
+> Should we handle cases where a release has multiple discs or parts with different track listings?
+> Should we handle cases where a release has multiple versions, such as a regular version and a deluxe version with bonus tracks?
+> Should we handle cases where a release has been removed from the Bandcamp artist page, but metadata is still available through other sources, such as APIs or web scraping other websites?
+
+1. that is not necessary.
+2. that is also not necessary.
+3. that is not necessary.
+
+I think we can start the implementation now.
+
+> Great, let's get started! If you have any questions or need any further clarification during the implementation process, please don't hesitate to ask.
+
+please provide me now with the code
+'''
+
+import logging
 import re
-import sqlite3
-from urllib.parse import urljoin, urlparse
+from dataclasses import dataclass
+from datetime import datetime
+from typing import List, Optional
 
 import requests
 from bs4 import BeautifulSoup
-from tabulate import tabulate
+from db import sqlite_db
+
+logging.basicConfig(level=logging.INFO)
+
+DB_NAME = "bandcamp.db"
 
 
-def extract_music_items_from_url(url):
-    # Check that the URL is valid
-    try:
-        response = requests.get(url)
-        response.raise_for_status()
-    except requests.exceptions.RequestException:
-        print(f"Invalid URL: {url}")
-        return []
-
-    # Extract all music items from the website's HTML
-    soup = BeautifulSoup(response.text, "html.parser")
-    music_items = []
-    music_grid = soup.find("ol", {"class": "music-grid"})
-    if music_grid:
-        music_items = music_grid.find_all("li", {"class": "music-grid-item"})
-
-    # Extract only the title and "art" image URL from each music item
-    result = []
-    for item in music_items:
-        item_dict = {"title": "", "art_url": "", "link": ""}
-        art_div = item.find("div", {"class": "art"})
-        if art_div:
-            item_dict["art_url"] = art_div.find("img").attrs.get("src", "").strip()
-        title_p = item.find("p", {"class": "title"})
-        if title_p:
-            item_dict["title"] = title_p.text.strip()
-        link_a = item.find("a", href=True)
-        if link_a:
-            item_dict["link"] = link_a["href"].strip()
-        result.append(item_dict)
-
-    return result
+@dataclass
+class Track:
+    number: int
+    title: str
+    duration: str
+    link: str
 
 
-def extract_track_info_from_links(music_items, base_url):
-    parsed_url = urlparse(base_url)
-    default_artist_name = parsed_url.netloc.split(".")[0]
-    for item in music_items:
-        link = item["link"]
-        print(f"grabbing title information for {link}")
-        if link:
-            absolute_link = urljoin(base_url, link)
-            try:
-                response = requests.get(absolute_link)
-                response.raise_for_status()
-            except requests.exceptions.RequestException:
-                print(f"Error retrieving link HTML: {absolute_link}")
-                continue
+@dataclass
+class Release:
+    title: str
+    artist: str
+    release_url: str
+    tracks: List[Track]
+    release_date: Optional[datetime] = None
 
-            soup = BeautifulSoup(response.text, "html.parser")
-            artist_header = soup.find("h3", string="by")
-            if artist_header:
-                artist_a = artist_header.find("a", href=True)
-                if artist_a:
-                    artist_name = artist_a.text.strip()
-                else:
-                    artist_name = default_artist_name
-            else:
-                artist_name = default_artist_name
 
-            release_date_elem = soup.find(
-                "div", {"class": "tralbumData tralbum-credits"}
+def get_new_releases(artist_nickname: str) -> List[Release]:
+    with sqlite_db(DB_NAME) as conn:
+        cursor = conn.cursor()
+
+        # Check if the artist exists in the database
+        cursor.execute("SELECT id FROM artists WHERE nickname = ?", (artist_nickname,))
+        artist_id = cursor.fetchone()
+        if not artist_id:
+            # Add the artist to the database if it doesn't exist
+            cursor.execute(
+                "INSERT INTO artists (nickname, last_checked) VALUES (?, ?)",
+                (artist_nickname, datetime.now()),
             )
-            if release_date_elem:
-                release_date_match = re.search(
-                    r"released\s+(.+)\n\s+\n", release_date_elem.text, re.IGNORECASE
-                )
-                if release_date_match:
-                    release_date_str = release_date_match.group(1).strip()
-                    try:
-                        release_date = datetime.datetime.strptime(
-                            release_date_str, "%B %d, %Y"
-                        )
-                        release_date = release_date.strftime("%Y-%m-%d")
-                    except ValueError:
-                        release_date = ""
-                else:
-                    release_date = ""
-            else:
-                release_date = ""
+            artist_id = cursor.lastrowid
+            conn.commit()
+        else:
+            artist_id = artist_id[0]
 
-            item["release_date"] = release_date
-            item["artist"] = artist_name
-
-            track_table = soup.find("table", {"id": "track_table"})
-            if track_table:
-                title_cols = track_table.find_all("td", {"class": "title-col"})
-                track_info_list = []
-                for title_col in title_cols:
-                    track_dict = {"link": "", "title": "", "time": "", "artist": ""}
-                    link_a = title_col.find("a", href=True)
-                    if link_a:
-                        track_dict["link"] = link_a["href"].strip()
-                    track_title = title_col.find("span", {"class": "track-title"})
-                    if track_title:
-                        track_dict["title"] = track_title.text.strip()
-                    time_span = title_col.find("span", {"class": "time"})
-                    if time_span:
-                        track_dict["time"] = time_span.text.strip()
-                    track_dict["artist"] = artist_name
-                    track_info_list.append(track_dict)
-
-                item["tracks"] = track_info_list
-
-    return music_items
-
-
-def create_music_data_table(conn):
-    c = conn.cursor()
-
-    # Create the music_data table if it doesn't exist
-    c.execute(
-        "CREATE TABLE IF NOT EXISTS music_data ("
-        "id INTEGER PRIMARY KEY AUTOINCREMENT, "
-        "title TEXT, "
-        "artist TEXT, "
-        "release_date TEXT, "
-        "art_url TEXT, "
-        "link TEXT UNIQUE, "
-        "tracks TEXT)"
-    )
-
-    # Check if the music_data table has necessary columns
-    c.execute("PRAGMA table_info('music_data')")
-    columns = set(col[1] for col in c.fetchall())
-    expected_columns = {
-        "id",
-        "title",
-        "artist",
-        "release_date",
-        "art_url",
-        "link",
-        "tracks",
-    }
-    missing_columns = expected_columns - columns
-
-    if missing_columns:
-        # Add missing columns to the music_data table
-        for col in missing_columns:
-            c.execute(f"ALTER TABLE music_data ADD COLUMN {col} TEXT")
-
-    unexpected_columns = columns - expected_columns
-    if unexpected_columns:
-        # Raise an error if unexpected columns are found
-        raise ValueError(
-            f"Unexpected columns in music_data table: {unexpected_columns}"
+        # Get all release URLs and release dates for the artist from the database
+        cursor.execute(
+            "SELECT link, release_date FROM releases WHERE artist_id = ?", (artist_id,)
         )
+        existing_releases = {row[0]: row[1] for row in cursor.fetchall()}
 
+    artist_url = f"https://{artist_nickname}.bandcamp.com"
+    response = requests.get(artist_url)
+    response.raise_for_status()
 
-def extract_music_data(urls, db_filename):
-    # Load existing items from the database
-    existing_items = set()
-    conn = sqlite3.connect(db_filename)
-    c = conn.cursor()
+    soup = BeautifulSoup(response.content, "html.parser")
+    release_links = [
+        a["href"] for a in soup.find("ol", {"class": "music-grid"}).find_all("a")
+    ]
+    release_links = [artist_url + link for link in release_links]
 
-    try:
-        create_music_data_table(conn)
+    # Find new release links that are not already in the database
+    new_links = set(release_links) - set(existing_releases.keys())
 
-        # Load existing items from the database
-        c.execute("SELECT link FROM music_data")
-        for row in c:
-            existing_items.add(row[0])
+    logging.info(f"Found {len(release_links)} releases for artist {artist_nickname}")
+    logging.info(f"{len(new_links)} new releases found for artist {artist_nickname}")
 
-        # Extract music data from each URL
-        music_data = []
-        for url in urls:
-            music_items = extract_music_items_from_url(url)
-            print(f"found {len(music_items)} items on {url}")
-            for item in music_items:
-                link = item.get("link")
-                if link and link not in existing_items:
-                    extract_track_info_from_links([item], url)
-                    music_data.append(item)
-
-        # Save new music data to the database
-        save_music_data_to_db(music_data, conn)
-
-        # Return sorted music data by release date
-        return sorted(music_data, key=lambda x: x.get("release_date"))
-
-    except sqlite3.Error as e:
-        print(f"Error: {e}")
-        conn.rollback()
-
-    finally:
-        conn.close()
-
-
-def save_music_data_to_db(music_data, conn):
-    c = conn.cursor()
-
-    try:
-        create_music_data_table(conn)
-
-        # Insert each item in the music data list into the table
-        for item in music_data:
-            title = item.get("title")
-            artist = item.get("artist")
-            release_date = item.get("release_date")
-            art_url = item.get("art_url")
-            link = item.get("link")
-            tracks = item.get("tracks")
-            if tracks:
-                tracks_json = json.dumps(tracks)
-            else:
-                tracks_json = None
-
-            c.execute(
-                "INSERT OR IGNORE INTO music_data (title, artist, release_date, art_url, link, tracks) "
-                "VALUES (?, ?, ?, ?, ?, json(?))",
-                (title, artist, release_date, art_url, link, tracks_json),
+    new_releases = []
+    for link in new_links:
+        try:
+            release = extract_title_metadata(link)
+            release.release_url = link
+            if release.release_url not in existing_releases:
+                new_releases.append(release)
+        except Exception as e:
+            logging.error(
+                f"Error extracting metadata for release at {link}: {e}", exc_info=True
             )
 
-        # Commit the changes
+    # Save new releases to the database
+    with sqlite_db(DB_NAME) as conn:
+        cursor = conn.cursor()
+
+        for release in new_releases:
+            # Add release to the database
+            cursor.execute(
+                "INSERT INTO releases (artist_id, title, release_date, link) VALUES (?, ?, ?, ?)",
+                (artist_id, release.title, release.release_date, release.release_url),
+            )
+            release_id = cursor.lastrowid
+
+            # Add tracks to the database
+            for track in release.tracks:
+                cursor.execute(
+                    "INSERT INTO tracks (release_id, number, title, duration, link) VALUES (?, ?, ?, ?, ?)",
+                    (release_id, track.number, track.title, track.duration, track.link),
+                )
+
         conn.commit()
 
-    except sqlite3.Error as e:
-        print(f"Error: {e}")
-        conn.rollback()
+    return new_releases
 
 
-def get_new_music_data(db_filename, release_date_str):
-    # Parse release_date_str into a datetime object
-    release_date = datetime.datetime.strptime(release_date_str, "%Y%m%d").date()
+def extract_title_metadata(release_url: str) -> Release:
+    logging.info(f"Extracting metadata from release at {release_url}")
+    response = requests.get(release_url)
+    response.raise_for_status()
 
-    # Connect to the database and retrieve music data with newer release dates
-    conn = sqlite3.connect(db_filename)
-    c = conn.cursor()
-    c.execute(
-        """SELECT id,
-                        coalesce(title, ''),
-                        coalesce(artist, ''),
-                        coalesce(release_date, ''),
-                        coalesce(art_url, ''),
-                        coalesce(link, ''),
-                        coalesce(tracks, '[]')
-                 FROM music_data
-                 WHERE release_date > ?""",
-        (release_date,),
+    soup = BeautifulSoup(response.content, "html.parser")
+
+    title = soup.find("h2", {"class": "trackTitle"}).text.strip()
+    artist = soup.find("h3").find("a").text.strip()
+
+    # Extract the release date from the tralbumData div using regex
+    date_str = soup.find("div", {"class": "tralbumData"}).text.strip()
+    match = re.search(r"released (.+)", date_str)
+    release_date_str = match.group(1) if match else ""
+
+    # Parse the release date string into a datetime object
+    release_date = (
+        datetime.strptime(release_date_str, "%B %d, %Y") if release_date_str else None
     )
-    rows = c.fetchall()
 
-    # Convert the rows to a list of dictionaries
-    music_data = [
-        {
-            "id": row[0],
-            "title": row[1],
-            "artist": row[2],
-            "release_date": row[3],
-            "art_url": row[4],
-            "link": row[5],
-            "tracks": json.loads(row[6]),
-        }
-        for row in rows
-    ]
+    tracks_table = soup.find("table", {"id": "track_table"})
+    tracks = []
+    for row in tracks_table.find_all("tr"):
+        try:
+            number_str = row.find("div", {"class": "track_number"}).text.strip()
+            number = int("".join(filter(str.isdigit, number_str)))
+            title = row.find("span", {"class": "track-title"}).text.strip()
+            duration = row.find("span", {"class": "time"}).text.strip()
+            link = (
+                release_url
+                + row.find("a", {"href": lambda href: href and "/track/" in href})[
+                    "href"
+                ]
+            )
+            tracks.append(Track(number, title, duration, link))
+        except Exception as e:
+            logging.error(
+                f"Error extracting metadata for track in release at {release_url}: {e}",
+                exc_info=True,
+            )
 
-    # Close the database connection and return the music data
-    conn.close()
-    return music_data
+    return Release(title, artist, release_url, tracks, release_date)
 
 
-def print_music_data_table(music_data):
-    """
-    Prints a table of music data to the console, grouping tracks by artist, title, and release date.
-    """
-    # Group the music data by artist, title, and release date
-    grouped_data = {}
-    for item in music_data:
-        key = (item["artist"], item["title"], item["release_date"])
-        if key not in grouped_data:
-            grouped_data[key] = {"tracks": [], "item": item}
-        grouped_data[key]["tracks"].extend([t["link"] for t in item["tracks"]])
-
-    # Extract the table headers from the dictionary keys
-    table_headers = ["Artist", "Title", "Release Date", "Link", "Tracks"]
-
-    # Format the music data as a table using the tabulate library
-    table_rows = []
-    for key, data in grouped_data.items():
-        artist, title, release_date = key
-        link = data["item"]["link"]
-        tracks = [[t] for t in data["tracks"]]
-        tracks_table = tabulate(tracks, tablefmt="plain")
-        table_rows.append([artist, title, release_date, link, tracks_table])
-    table_str = tabulate(table_rows, headers=table_headers)
-
-    # Print the table to the console
-    print(table_str)
+if __name__ == "__main__":
+    artist = "bookashade"
+    print(get_new_releases(artist))
