@@ -20,23 +20,20 @@ Write the following routes:
 Every API route should return a response to the user.
 '''
 
-from music_data import DB_NAME
-
 from datetime import datetime
-from typing import Optional
+from typing import List, Optional
 
+from fastapi import FastAPI, HTTPException, status
 from pydantic import BaseModel
+
+from .db import sqlite_db
+from .music_data import DB_NAME
 
 
 class Artist(BaseModel):
     id: Optional[int]
     nickname: str
     last_checked: Optional[datetime]
-
-from fastapi import FastAPI, HTTPException, status
-from typing import List
-
-from db import sqlite_db
 
 
 app = FastAPI()
@@ -55,10 +52,14 @@ def list_artists():
 def get_artist(artist_id: int):
     with sqlite_db(DB_NAME) as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT id, nickname, last_checked FROM artists WHERE id = ?", (artist_id,))
+        cursor.execute(
+            "SELECT id, nickname, last_checked FROM artists WHERE id = ?", (artist_id,)
+        )
         row = cursor.fetchone()
         if not row:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Artist not found")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Artist not found"
+            )
         return Artist(id=row[0], nickname=row[1], last_checked=row[2])
 
 
@@ -78,11 +79,13 @@ def delete_artist(artist_id: int):
         cursor = conn.cursor()
         cursor.execute("DELETE FROM artists WHERE id = ?", (artist_id,))
         if cursor.rowcount == 0:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Artist not found")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Artist not found"
+            )
         conn.commit()
-
 
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run("api:app", host="0.0.0.0", port=8000, workers=1)

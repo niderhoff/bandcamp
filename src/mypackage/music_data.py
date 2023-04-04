@@ -130,7 +130,8 @@ from typing import List, Optional
 
 import requests
 from bs4 import BeautifulSoup
-from db import sqlite_db
+
+from .db import sqlite_db
 
 logging.basicConfig(level=logging.INFO)
 
@@ -274,18 +275,24 @@ def extract_title_metadata(release_url: str) -> Release:
     return Release(title, artist, release_url, tracks, release_date)
 
 
-def update_releases_db():
+def get_artist_nicknames_from_db():
     with sqlite_db(DB_NAME) as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT nickname FROM artists")
         rows = cursor.fetchall()
         artist_nicknames = [row[0] for row in rows]
+        return artist_nicknames
 
-    for artist_nickname in artist_nicknames:
+
+def update_releases_db():
+    for artist_nickname in get_artist_nicknames_from_db():
         try:
-            releases = get_new_releases(artist_nickname)
+            get_new_releases(artist_nickname)
         except Exception as e:
-            logging.error(f"Error updating releases for artist {artist_nickname}: {e}", exc_info=True)
+            logging.error(
+                f"Error updating releases for artist {artist_nickname}: {e}",
+                exc_info=True,
+            )
 
 
 if __name__ == "__main__":
