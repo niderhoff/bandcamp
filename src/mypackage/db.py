@@ -1,9 +1,11 @@
+"""Database related stuff."""
 import sqlite3
 from contextlib import contextmanager
 
 
 @contextmanager
 def sqlite_db(db_name):
+    """Connect to SQLITE DB and create Schema if not exists."""
     if not db_name.endswith(".db"):
         raise ValueError("Not a SQLite database")
 

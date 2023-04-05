@@ -1,4 +1,5 @@
 [flake8]
+docstring-convention = pydocstyle
 ignore = E203, E266, E501, W503
 max-line-length = 88
 exclude =
@@ -12,3 +13,5 @@ exclude =
     *.pyo,
     *.egg,
     .venv
+[pydocstyle]
+ignore = D205, D400

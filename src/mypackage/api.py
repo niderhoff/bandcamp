@@ -20,27 +20,78 @@ Write the following routes:
 Every API route should return a response to the user.
 '''
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Optional
 
-from fastapi import FastAPI, HTTPException, status
-from pydantic import BaseModel
+from fastapi import FastAPI, HTTPException, status, Response
 
 from .db import sqlite_db
-from .music_data import DB_NAME
-
-
-class Artist(BaseModel):
-    id: Optional[int]
-    nickname: str
-    last_checked: Optional[datetime]
+from .music_data import DB_NAME, get_releases_by_date
+from .model import Artist
 
 
 app = FastAPI()
 
 
+@app.get("/releases")
+@app.get("/releases/{date}")
+def get_releases(date: Optional[str] = None) -> Response:
+    """
+    Retrieve a list of releases based on a given date (if provided) using data from a specified SQLite database.
+
+    Args:
+        date (str): A string format of a date (YYYYMMDD) for which to retrieve releases. Defaults to None.
+    Returns:
+        Response: A Response object with a list of releases in HTML table format.
+    """
+    if not date:
+        last_thursday = datetime.today() - timedelta(
+            days=datetime.today().weekday() + 3
+        )
+        date = last_thursday.strftime("%Y%m%d")
+
+    releases = get_releases_by_date(date, DB_NAME)
+
+    release_table = "\n".join(
+        [
+            f"<tr><td>{release.release_date}</td><td>{release.artist}</td><td>{release.title}</td><td><a href='{release.link}'>{release.link}</a></td></tr>"
+            for release in releases
+        ]
+    )
+
+    table_html = f"""
+<html>
+    <head>
+        <title>Releases since {date}</title>
+        <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.0/css/bootstrap.min.css">
+    </head>
+    <body>
+        <div class="container">
+            <h1>Releases since {date}</h1>
+            <table class="table table-striped table-bordered">
+                <thead class="thead-light">
+                    <tr>
+                        <th>Release Date</th>
+                        <th>Artist</th>
+                        <th>Title</th>
+                        <th>Link</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {release_table}
+                </tbody>
+            </table>
+        </div>
+    </body>
+</html>
+    """
+
+    return Response(content=table_html, media_type="text/html")
+
+
 @app.get("/artists", response_model=List[Artist])
-def list_artists():
+def list_artists() -> List[Artist]:
+    """List all registered artists."""
     with sqlite_db(DB_NAME) as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT id, nickname, last_checked FROM artists")
@@ -49,7 +100,8 @@ def list_artists():
 
 
 @app.get("/artists/{artist_id}", response_model=Artist)
-def get_artist(artist_id: int):
+def get_artist(artist_id: int) -> Artist:
+    """Get artist info from DB."""
     with sqlite_db(DB_NAME) as conn:
         cursor = conn.cursor()
         cursor.execute(
@@ -64,7 +116,8 @@ def get_artist(artist_id: int):
 
 
 @app.post("/artists", response_model=Artist)
-def create_artist(artist: Artist):
+def create_artist(artist: Artist) -> Artist:
+    """Add new artist to the DB."""
     with sqlite_db(DB_NAME) as conn:
         cursor = conn.cursor()
         cursor.execute("INSERT INTO artists (nickname) VALUES (?)", (artist.nickname,))
@@ -75,6 +128,7 @@ def create_artist(artist: Artist):
 
 @app.delete("/artists/{artist_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_artist(artist_id: int):
+    """Delete artist from the DB."""
     with sqlite_db(DB_NAME) as conn:
         cursor = conn.cursor()
         cursor.execute("DELETE FROM artists WHERE id = ?", (artist_id,))
@@ -88,4 +142,4 @@ def delete_artist(artist_id: int):
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run("api:app", host="0.0.0.0", port=8000, workers=1)
+    uvicorn.run("mypackage.api:app", host="0.0.0.0", port=8000, workers=1, reload=True)

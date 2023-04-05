@@ -1,11 +1,13 @@
 '''
+Written by ChatGPT using the following prompt.
+
 You are a backend developer proficient in python and we are together working on a project. Here's a summary of the project so far:
-* The goal of the project is to create a tool in Python to track new releases coming out from artists we follow. 
+* The goal of the project is to create a tool in Python to track new releases coming out from artists we follow.
 * So far, we have implemented the core functionality of the tool, including error handling for network and HTTP issues, missing data, and incorrect input types.
 
 The Requirements are as follows:
 
-* Given a list of saved artist_nicknames, we will visit the bandcamp artist page at https://artist_nickname.bandcamp.com where we can see all music releases from that artist. 
+* Given a list of saved artist_nicknames, we will visit the bandcamp artist page at https://artist_nickname.bandcamp.com where we can see all music releases from that artist.
 * We will download the page using requests and and parse the html with beautifulsoup.
 * We have defined a get_new_releases function that takes a user provided artist_nickname as input and returns list of dataclasses representing new releases from that artist.
 * The get_new_releases function first checks that the input argument is valid and that the artist subdomain is valid (all characters should be valid parts of an URL). It will then proceed to download the HTML from bandcamp, handling any possible HTTP errors.
@@ -22,18 +24,18 @@ The Requirements are as follows:
     - list of tracks: a list of 'track' dataclass instances.
 * The artist name can be extract from an html object which looks like this:
 """
-<h3 style="margin:0px;">by 
-        <span> 
+<h3 style="margin:0px;">by
+        <span>
           <a href="https://bookashade.bandcamp.com">Booka Shade</a>
           </span>
-        
+
         </h3>
 """
 * The title name can be extracted from this html object:
 """
 <h2 class="trackTitle">
             Twisted Cadence [Single]
-            
+
         </h2>
 """
 * The release date can be extracted from this object:
@@ -55,7 +57,7 @@ The Requirements are as follows:
         <span class="time secondaryText">
             04:40
         </span>
-    </div> 
+    </div>
 </td>
 <td class="info-col"><div class="info_link"><a href="/track/twisted-cadence"></a></div></td>
 <td class="download-col">
@@ -124,38 +126,22 @@ please provide me now with the code
 
 import logging
 import re
-from dataclasses import dataclass
 from datetime import datetime
-from typing import List, Optional
+from typing import List
 
 import requests
 from bs4 import BeautifulSoup
 
 from .db import sqlite_db
+from .model import ReleaseDenorm, Track
 
 logging.basicConfig(level=logging.INFO)
 
 DB_NAME = "bandcamp.db"
 
 
-@dataclass
-class Track:
-    number: int
-    title: str
-    duration: str
-    link: str
-
-
-@dataclass
-class Release:
-    title: str
-    artist: str
-    release_url: str
-    tracks: List[Track]
-    release_date: Optional[datetime] = None
-
-
-def get_new_releases(artist_nickname: str) -> List[Release]:
+def get_new_releases(artist_nickname: str) -> List[ReleaseDenorm]:
+    """Get new releases from bandcamp artist page."""
     with sqlite_db(DB_NAME) as conn:
         cursor = conn.cursor()
 
@@ -184,27 +170,29 @@ def get_new_releases(artist_nickname: str) -> List[Release]:
     response.raise_for_status()
 
     soup = BeautifulSoup(response.content, "html.parser")
-    release_links = [
+    release_urls = [
         a["href"] for a in soup.find("ol", {"class": "music-grid"}).find_all("a")
     ]
-    release_links = [artist_url + link for link in release_links]
+    release_urls = [artist_url + link for link in release_urls]
 
     # Find new release links that are not already in the database
-    new_links = set(release_links) - set(existing_releases.keys())
+    new_release_urls = set(release_urls) - set(existing_releases.keys())
 
-    logging.info(f"Found {len(release_links)} releases for artist {artist_nickname}")
-    logging.info(f"{len(new_links)} new releases found for artist {artist_nickname}")
+    logging.info(f"Found {len(release_urls)} releases for artist {artist_nickname}")
+    logging.info(
+        f"{len(new_release_urls)} new releases found for artist {artist_nickname}"
+    )
 
-    new_releases = []
-    for link in new_links:
+    new_releases: List[ReleaseDenorm] = []
+    for release_url in new_release_urls:
         try:
-            release = extract_title_metadata(link)
-            release.release_url = link
-            if release.release_url not in existing_releases:
+            release = extract_title_metadata(release_url)
+            if release.link not in existing_releases:
                 new_releases.append(release)
         except Exception as e:
             logging.error(
-                f"Error extracting metadata for release at {link}: {e}", exc_info=True
+                f"Error extracting metadata for release at {release_url}: {e}",
+                exc_info=True,
             )
 
     # Save new releases to the database
@@ -215,7 +203,7 @@ def get_new_releases(artist_nickname: str) -> List[Release]:
             # Add release to the database
             cursor.execute(
                 "INSERT INTO releases (artist_id, title, release_date, link) VALUES (?, ?, ?, ?)",
-                (artist_id, release.title, release.release_date, release.release_url),
+                (artist_id, release.title, release.release_date, release.link),
             )
             release_id = cursor.lastrowid
 
@@ -231,7 +219,8 @@ def get_new_releases(artist_nickname: str) -> List[Release]:
     return new_releases
 
 
-def extract_title_metadata(release_url: str) -> Release:
+def extract_title_metadata(release_url: str) -> ReleaseDenorm:
+    """Extract title metadata from the bandcamp release page."""
     logging.info(f"Extracting metadata from release at {release_url}")
     response = requests.get(release_url)
     response.raise_for_status()
@@ -259,23 +248,30 @@ def extract_title_metadata(release_url: str) -> Release:
             number = int("".join(filter(str.isdigit, number_str)))
             title = row.find("span", {"class": "track-title"}).text.strip()
             duration = row.find("span", {"class": "time"}).text.strip()
-            link = (
+            track_url = (
                 release_url
                 + row.find("a", {"href": lambda href: href and "/track/" in href})[
                     "href"
                 ]
             )
-            tracks.append(Track(number, title, duration, link))
+            tracks.append(Track(number, title, duration, track_url))
         except Exception as e:
             logging.error(
                 f"Error extracting metadata for track in release at {release_url}: {e}",
                 exc_info=True,
             )
 
-    return Release(title, artist, release_url, tracks, release_date)
+    return ReleaseDenorm(title, artist, release_url, release_date, tracks)
 
 
 def get_artist_nicknames_from_db():
+    """Retrieve all artist nicknames from a sqlite database.
+
+    Executes a SELECT query in the database and returns a list of all artist nicknames.
+
+    Returns:
+        artist_nicknames (list): A list of strings representing all artist nicknames in the database.
+    """
     with sqlite_db(DB_NAME) as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT nickname FROM artists")
@@ -285,6 +281,11 @@ def get_artist_nicknames_from_db():
 
 
 def update_releases_db():
+    """
+    Update the releases database for each artist nickname by fetching and adding new releases.
+
+    Log any errors that occur during the process.
+    """
     for artist_nickname in get_artist_nicknames_from_db():
         try:
             get_new_releases(artist_nickname)
@@ -293,6 +294,33 @@ def update_releases_db():
                 f"Error updating releases for artist {artist_nickname}: {e}",
                 exc_info=True,
             )
+
+
+def get_releases_by_date(date: str, db_name: str) -> List[ReleaseDenorm]:
+    """Take in a date string in the format `YYYYMMDD` and a database filename as arguments.
+
+    Then use a context manager to create a connection to the database and execute a SQL query to retrieve all releases with the
+    given date. The results are then converted into a list of `Release` objects
+    using the `pydantic` library and returned.
+    """
+    formatted_date = datetime.strptime(date, "%Y%m%d")
+    with sqlite_db(db_name) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT r.title, a.nickname, r.link,r.release_date
+            FROM releases r INNER JOIN artists a ON r.artist_id=a.id
+            WHERE r.release_date >= ? ORDER BY r.release_date DESC
+            """,
+            (formatted_date,),
+        )
+        results = cursor.fetchall()
+        releases = [
+            ReleaseDenorm(title=row[0], artist=row[1], link=row[2], release_date=row[3])
+            for row in results
+        ]
+
+        return releases
 
 
 if __name__ == "__main__":
