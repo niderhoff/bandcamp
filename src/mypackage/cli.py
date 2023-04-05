@@ -6,11 +6,9 @@ from datetime import datetime, timedelta
 
 from tabulate import tabulate
 from mypackage.model import ReleaseDenorm
-
-from mypackage.music_data import DB_NAME, get_releases_by_date
+from mypackage.music_data import DB_NAME, get_releases_by_date, update_releases_db
 
 BASE_URL = "http://localhost:8000"
-
 
 @click.group()
 def cli():
@@ -94,7 +92,11 @@ def list_artists():
         click.echo(f"Error getting artists: {response.text}")
 
 
-@click.command()
+@cli.command()
+def update():
+    update_releases_db()
+
+@cli.command()
 @click.option(
     "--date",
     default=(datetime.today() - timedelta(days=datetime.today().weekday())).strftime(
@@ -102,7 +104,7 @@ def list_artists():
     ),
     help="Date in format YYYYMMDD",
 )
-def get_new_releases(date):
+def new(date):
     """Return new releases based on the given date.
 
     It takes one argument `date`, which is the date of the new releases to be
@@ -131,10 +133,6 @@ def get_new_releases(date):
             headers=use_fields,
         )
     )
-
-
-if __name__ == "__main__":
-    get_new_releases()
 
 
 if __name__ == "__main__":
