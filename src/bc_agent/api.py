@@ -20,17 +20,22 @@ Write the following routes:
 Every API route should return a response to the user.
 '''
 
+import sys
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import List, Optional
 
-from fastapi import FastAPI, HTTPException, status, Response
+from fastapi import FastAPI, HTTPException, Response, status
 
 from .db import sqlite_db
-from .music_data import DB_NAME, get_releases_by_date
 from .model import Artist
-
+from .music_data import DB_NAME, get_releases_by_date
 
 app = FastAPI()
+
+if not Path(DB_NAME).exists():
+    sys.exit(f"{Path(DB_NAME).absolute()} does not exist.")
+print(f"DB: {Path(DB_NAME).absolute()}")
 
 
 @app.get("/releases")
@@ -93,6 +98,7 @@ def get_releases(date: Optional[str] = None) -> Response:
 def list_artists() -> List[Artist]:
     """List all registered artists."""
     with sqlite_db(DB_NAME) as conn:
+        print(Path(DB_NAME).absolute())
         cursor = conn.cursor()
         cursor.execute("SELECT id, nickname, last_checked FROM artists")
         rows = cursor.fetchall()
@@ -142,4 +148,4 @@ def delete_artist(artist_id: int):
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run("mypackage.api:app", host="0.0.0.0", port=8000, workers=1, reload=True)
+    uvicorn.run("bc_agent.api:app", host="0.0.0.0", port=8000, workers=1, reload=True)

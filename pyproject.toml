@@ -4,7 +4,36 @@ testpaths = "tests"
 python_files = "test_*.py"
 python_functions = "test_*"
 python_classes = "Test*"
+
 [tool.pytest.ini_options]
 pythonpath = [
   "src"
 ]
+
+[tool.poetry]
+name = "bc_agent"
+version = "0.1.0"
+description = ""
+authors = ["Nicolas Iderhoff <hello@niid.xyz>"]
+readme = "README.md"
+packages = [
+    { include = "bc_agent", from = "src" }
+]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+pydantic = "<2.0"
+fastapi = "<0.102.0"
+requests = "^2.31.0"
+beautifulsoup4 = "^4.12.2"
+uvicorn = "^0.23.2"
+tabulate = "^0.9.0"
+
+[tool.poetry.group.dev.dependencies]
+flake8 = "^6.1.0"
+black = "^23.9.1"
+pytest = "^7.4.2"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

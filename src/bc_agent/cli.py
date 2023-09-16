@@ -5,8 +5,8 @@ import requests
 from datetime import datetime, timedelta
 
 from tabulate import tabulate
-from mypackage.model import ReleaseDenorm
-from mypackage.music_data import DB_NAME, get_releases_by_date, update_releases_db
+from bc_agent.model import ReleaseDenorm
+from bc_agent.music_data import DB_NAME, get_releases_by_date, update_releases_db
 
 BASE_URL = "http://localhost:8000"
 
